@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import webbrowser
 from datetime import datetime
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import webview
 
@@ -66,6 +68,17 @@ class EventsApi:
     def get_status_text(self) -> str:
         return _format_status(events_store.load_events())
 
+    def open_event(self, url: str) -> Dict[str, Any]:
+        link = str(url or "").strip()
+        parsed = urlparse(link)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return {"ok": False, "message": "Link evento non valido."}
+        try:
+            webbrowser.open(link)
+        except Exception as exc:
+            return {"ok": False, "message": f"Impossibile aprire il browser: {exc}"}
+        return {"ok": True, "message": "Evento aperto nel browser."}
+
 
 class SettingsApi:
     def get_config(self) -> Dict[str, Any]:
@@ -91,6 +104,25 @@ class SettingsApi:
         if result and len(result) > 0:
             return {"ok": True, "path": result[0]}
         return {"ok": False, "path": ""}
+
+    def test_notification(self) -> Dict[str, Any]:
+        try:
+            from outlook_notifier.notifier import EventNotifier
+
+            notifier = EventNotifier(AppConfig.load())
+            try:
+                notifier.send_test()
+            finally:
+                notifier.shutdown()
+            return {
+                "ok": True,
+                "message": (
+                    "Notifica di prova inviata. Se non vedi un banner: "
+                    "Impostazioni di Sistema → Notifiche → Script Editor / osascript → Abilita."
+                ),
+            }
+        except Exception as exc:
+            return {"ok": False, "message": f"Notifica di prova fallita: {exc}"}
 
     def close_window(self) -> None:
         if webview.windows:

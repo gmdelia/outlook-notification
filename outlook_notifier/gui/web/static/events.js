@@ -19,6 +19,23 @@ function formatTime(date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+async function openEventLink(url) {
+  if (!url || !window.pywebview || !window.pywebview.api) return;
+  try {
+    await window.pywebview.api.open_event(url);
+  } catch (err) {
+    // ignore — link open failures are non-fatal in the UI
+  }
+}
+
+function bindEventClicks(root) {
+  root.querySelectorAll("[data-url]").forEach((el) => {
+    el.addEventListener("click", () => {
+      openEventLink(el.getAttribute("data-url"));
+    });
+  });
+}
+
 function render(payload) {
   document.getElementById("title").textContent = payload.title || "Eventi di oggi";
   document.getElementById("status").textContent = payload.status || "";
@@ -44,7 +61,10 @@ function render(payload) {
     for (const e of allDay) {
       let text = e.subject || "(Senza titolo)";
       if (e.location) text += " · " + e.location;
-      html += `<div class="allday-item">• ${escapeHtml(text)}</div>`;
+      const clickable = e.web_link
+        ? ` class="allday-item clickable" data-url="${escapeHtml(e.web_link)}" title="Apri in Outlook"`
+        : ` class="allday-item"`;
+      html += `<div${clickable}>• ${escapeHtml(text)}</div>`;
     }
   }
 
@@ -54,6 +74,7 @@ function render(payload) {
       : "In attesa della sincronizzazione…";
     html += `<div class="empty">${escapeHtml(msg)}</div>`;
     content.innerHTML = html;
+    bindEventClicks(content);
     return;
   }
 
@@ -70,7 +91,8 @@ function render(payload) {
     const e = timed[i];
     const isNext = i === nextIdx;
     const isPast = e.startDate < now && !isNext;
-    const cls = isNext ? "event-row next" : isPast ? "event-row past" : "event-row";
+    let cls = isNext ? "event-row next" : isPast ? "event-row past" : "event-row";
+    if (e.web_link) cls += " clickable";
 
     if (isNext) {
       html += `<div class="now-marker"><span>Adesso ${escapeHtml(formatTime(now))}</span></div>`;
@@ -81,8 +103,9 @@ function render(payload) {
     let meta = e.location || "";
     if (isNext) meta = ("► prossimo  " + meta).trim();
 
+    const dataUrl = e.web_link ? ` data-url="${escapeHtml(e.web_link)}" title="Apri in Outlook"` : "";
     html += `
-      <div class="${cls}">
+      <div class="${cls}"${dataUrl}>
         <div class="time">${escapeHtml(timeStr)}</div>
         <div class="dot"></div>
         <div class="subject">${escapeHtml(e.subject || "(Senza titolo)")}</div>
@@ -91,6 +114,7 @@ function render(payload) {
   }
   html += "</div>";
   content.innerHTML = html;
+  bindEventClicks(content);
 }
 
 async function refresh() {

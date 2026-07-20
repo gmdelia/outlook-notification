@@ -54,6 +54,16 @@ document.getElementById("browse-sound").addEventListener("click", async () => {
   }
 });
 
+document.getElementById("test-notification").addEventListener("click", async () => {
+  setMessage("Invio notifica di prova…");
+  try {
+    const result = await window.pywebview.api.test_notification();
+    setMessage(result.message, result.ok ? "ok" : "error");
+  } catch (err) {
+    setMessage("Errore prova notifica", "error");
+  }
+});
+
 document.getElementById("reconnect").addEventListener("click", async () => {
   const result = await window.pywebview.api.request_reconnect();
   setMessage(result.message, "ok");
