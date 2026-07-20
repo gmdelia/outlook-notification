@@ -120,7 +120,7 @@ class ReminderScheduler:
                 continue
 
             for reminder_min in self._config.reminder_minutes_sorted():
-                if self._state.was_sent(event.id, reminder_min):
+                if self._state.was_sent(event.id, reminder_min, event.start):
                     continue
 
                 trigger_at = event.start - timedelta(minutes=reminder_min)
@@ -128,7 +128,7 @@ class ReminderScheduler:
 
                 if trigger_at <= now < window_end:
                     self._send_reminder(event, reminder_min)
-                    self._state.mark_sent(event.id, reminder_min)
+                    self._state.mark_sent(event.id, reminder_min, event.start)
 
     def _process_all_day_event(self, event: CalendarEvent, now: datetime) -> None:
         if not self._config.notify_all_day_events:
@@ -147,12 +147,12 @@ class ReminderScheduler:
         poll_window = timedelta(minutes=max(1, self._config.poll_interval_minutes))
         reminder_key = 0
 
-        if self._state.was_sent(event.id, reminder_key):
+        if self._state.was_sent(event.id, reminder_key, event.start):
             return
 
         if trigger_at <= now < trigger_at + poll_window:
             self._send_reminder(event, reminder_key, all_day=True)
-            self._state.mark_sent(event.id, reminder_key)
+            self._state.mark_sent(event.id, reminder_key, event.start)
 
     def _send_reminder(
         self,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Set
 
@@ -41,11 +41,13 @@ class ReminderState:
             self._sent.clear()
             self._save()
 
-    def was_sent(self, event_id: str, reminder_minutes: int) -> bool:
-        key = f"{event_id}:{reminder_minutes}:{self._current_day}"
-        return key in self._sent
+    def _key(self, event_id: str, reminder_minutes: int, start: datetime) -> str:
+        # Include start so rescheduling the same Outlook event re-arms reminders.
+        return f"{event_id}:{reminder_minutes}:{start.isoformat()}:{self._current_day}"
 
-    def mark_sent(self, event_id: str, reminder_minutes: int) -> None:
-        key = f"{event_id}:{reminder_minutes}:{self._current_day}"
-        self._sent.add(key)
+    def was_sent(self, event_id: str, reminder_minutes: int, start: datetime) -> bool:
+        return self._key(event_id, reminder_minutes, start) in self._sent
+
+    def mark_sent(self, event_id: str, reminder_minutes: int, start: datetime) -> None:
+        self._sent.add(self._key(event_id, reminder_minutes, start))
         self._save()
