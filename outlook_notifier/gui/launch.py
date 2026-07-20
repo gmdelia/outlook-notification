@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import os
-import shlex
 import subprocess
 import sys
-from pathlib import Path
 from typing import Mapping, Optional, Sequence
 
 from outlook_notifier import subprocess_registry
@@ -27,23 +25,16 @@ def spawn_gui_module(
 ) -> subprocess.Popen:
     merged_env = _build_env(env)
     args = list(module_args or [])
-    if sys.platform != "darwin":
+    cmd = [sys.executable, "-m", module, *args]
+
+    if sys.platform == "darwin":
+        # Detach from pystray/ObjC parent; avoid bash -lc so login profiles
+        # (e.g. sdkman on macOS bash 3.2) are not sourced.
+        merged_env.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
         return subprocess_registry.spawn(
-            [sys.executable, "-m", module, *args],
+            cmd,
             env=merged_env,
+            start_new_session=True,
         )
 
-    merged_env.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
-    repo_root = str(Path(__file__).resolve().parents[2])
-    cmd = (
-        f'cd "{repo_root}" && '
-        f'source ".venv/bin/activate" && '
-        f"exec python -m {shlex.quote(module)}"
-    )
-    if args:
-        cmd += " " + " ".join(shlex.quote(part) for part in args)
-    return subprocess_registry.spawn(
-        ["/bin/bash", "-lc", cmd],
-        env=merged_env,
-        start_new_session=True,
-    )
+    return subprocess_registry.spawn(cmd, env=merged_env)

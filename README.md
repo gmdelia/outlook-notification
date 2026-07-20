@@ -139,23 +139,35 @@ Settings are saved in `config.json` inside the config directory above.
 
 ## Notifications
 
+Reminders are sent by the **tray process in the background**. You do not need the Events or Settings windows open.
+
 ### macOS
 
-If banners do not appear:
+**Immediate banners** (login prompt, test button, poll fallback) use **AppleScript** (`display notification`) when you run `python -m outlook_notifier` / `./scripts/run.sh`. Enable banners for **Script Editor** / **osascript** in **System Settings → Notifications**.
 
-1. Open **System Settings → Notifications**
-2. Find **Python** or **Outlook Notifier**
-3. Allow notifications and banners
+**Scheduled reminders (including during standby)** work differently:
 
-The app may also play a system sound (`afplay`) alongside the popup for more reliable audio.
+- After each calendar sync, the app registers upcoming reminders with **macOS launchd** (`StartCalendarInterval`).
+- At the configured time (15 / 5 / 30 minutes before an event, etc.), launchd runs a small helper that shows a native Notification Center banner — **even if the Mac was asleep** and the Python process was suspended.
+- On the next sync (every few minutes while awake, or right after wake), jobs are refreshed if events moved on Outlook.
+
+Requirements:
+
+1. The tray app must have run at least once after login so reminders can be scheduled (you can close Event/Settings windows; the menu-bar icon can stay).
+2. Allow notifications for **Script Editor** / **osascript** (or the app shown after **Impostazioni → Prova notifica**).
+3. If you move an event in Outlook, the scheduled time updates on the next sync (default: every 5 minutes).
+
+**Poll fallback:** if launchd scheduling fails, the tray still polls and sends catch-up reminders after wake (`trigger` up to event start).
+
+Focus / Do Not Disturb can hide banners.
 
 ### Windows
 
-Allow notifications for Python / the app in **Settings → System → Notifications**.
+Allow notifications for Python / the app in **Settings → System → Notifications**. Reminders use polling only (no OS pre-scheduling).
 
 ### Linux
 
-Depends on your desktop environment. Ensure a notification daemon is running (for example GNOME, KDE, or a Freedesktop-compatible notifier). Sound support varies by environment.
+Depends on your desktop environment. Ensure a notification daemon is running (for example GNOME, KDE, or a Freedesktop-compatible notifier). Reminders use polling only. Sound support varies by environment.
 
 ## Local data
 
@@ -164,6 +176,8 @@ Depends on your desktop environment. Ensure a notification daemon is running (fo
 ├── config.json               # settings
 ├── state.json                # reminders already sent today
 ├── events_today.json         # cached events for the UI
+├── launchd/                  # macOS: scheduled reminder jobs (plist)
+├── launchd_jobs.json         # macOS: active launchd job labels
 ├── session.ok                # login marker
 └── browser_profile/          # Outlook Web browser session
 ```
