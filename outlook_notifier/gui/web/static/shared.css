@@ -1,0 +1,278 @@
+:root {
+  --bg: #ffffff;
+  --fg: #202124;
+  --subtle: #5f6368;
+  --border: #dadce0;
+  --axis: #9aa0a6;
+  --event: #1a73e8;
+  --next: #188038;
+  --past: #9aa0a6;
+  --now: #d93025;
+  --btn-bg: #f1f3f4;
+  --btn-primary: #1a73e8;
+  --btn-primary-fg: #ffffff;
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 14px;
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.subtle {
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.header {
+  padding: 16px 18px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header .status {
+  margin-top: 4px;
+  color: var(--subtle);
+}
+
+.content {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 18px 18px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 8px 0 6px;
+}
+
+.allday-item {
+  padding: 4px 0;
+  color: var(--fg);
+}
+
+.timeline {
+  position: relative;
+  margin-top: 8px;
+  padding-left: 72px;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 58px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--axis);
+}
+
+.event-row {
+  position: relative;
+  min-height: 44px;
+  margin-bottom: 10px;
+  padding-left: 18px;
+}
+
+.event-row .dot {
+  position: absolute;
+  left: -20px;
+  top: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--event);
+}
+
+.event-row.next .dot {
+  width: 14px;
+  height: 14px;
+  left: -22px;
+  top: 6px;
+  background: var(--next);
+}
+
+.event-row.past .dot {
+  background: var(--past);
+}
+
+.event-row .time {
+  position: absolute;
+  left: -72px;
+  top: 4px;
+  width: 50px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--subtle);
+}
+
+.event-row .subject {
+  font-weight: 500;
+}
+
+.event-row.next .subject {
+  font-weight: 700;
+  color: var(--next);
+}
+
+.event-row.past .subject {
+  color: var(--past);
+}
+
+.event-row .meta {
+  font-size: 12px;
+  color: var(--subtle);
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+.event-row.next .meta {
+  color: var(--next);
+  font-weight: 600;
+}
+
+.now-marker {
+  position: relative;
+  height: 20px;
+  margin: 4px 0 8px;
+}
+
+.now-marker::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  right: 0;
+  top: 10px;
+  border-top: 1px dashed var(--now);
+}
+
+.now-marker span {
+  position: absolute;
+  left: -72px;
+  top: 0;
+  color: var(--now);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.empty {
+  color: var(--subtle);
+  padding: 24px 8px;
+  text-align: center;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 18px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+input[type="text"],
+input[type="number"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.row input {
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.actions .spacer {
+  flex: 1;
+}
+
+button {
+  border: 1px solid var(--border);
+  background: var(--btn-bg);
+  color: var(--fg);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--btn-primary);
+  border-color: var(--btn-primary);
+  color: var(--btn-primary-fg);
+}
+
+button:hover {
+  filter: brightness(0.97);
+}
+
+.message {
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--subtle);
+}
+
+.message.error {
+  color: var(--now);
+}
+
+.message.ok {
+  color: var(--next);
+}

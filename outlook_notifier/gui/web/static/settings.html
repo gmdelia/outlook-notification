@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Outlook Notifier — Impostazioni</title>
+  <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+  <div class="header">
+    <h1>Impostazioni</h1>
+    <div class="status">Modifica le impostazioni e salva</div>
+  </div>
+  <form id="settings-form">
+    <label>
+      Intervallo sincronizzazione (minuti)
+      <input type="number" id="poll_interval_minutes" min="1" required />
+    </label>
+
+    <label>
+      Promemoria prima dell'evento (minuti, separati da virgola)
+      <input type="text" id="reminder_minutes" required />
+    </label>
+
+    <label class="checkbox">
+      <input type="checkbox" id="notifications_enabled" />
+      Abilita notifiche popup
+    </label>
+
+    <label class="checkbox">
+      <input type="checkbox" id="sound_enabled" />
+      Abilita suono
+    </label>
+
+    <label>
+      File suono personalizzato (opzionale)
+      <div class="row">
+        <input type="text" id="sound_file" />
+        <button type="button" id="browse-sound">Sfoglia…</button>
+      </div>
+    </label>
+
+    <label class="checkbox">
+      <input type="checkbox" id="notify_all_day_events" />
+      Notifica eventi tutto il giorno
+    </label>
+
+    <label>
+      Orario promemoria eventi tutto il giorno (HH:MM)
+      <input type="text" id="all_day_reminder_time" required />
+    </label>
+
+    <label>
+      Fuso orario (IANA, es. Europe/Rome)
+      <input type="text" id="timezone" />
+    </label>
+
+    <label>
+      URL Outlook
+      <input type="text" id="outlook_url" required />
+    </label>
+
+    <div class="message" id="message"></div>
+
+    <div class="actions">
+      <button type="submit" class="primary">Salva</button>
+      <button type="button" id="reconnect">Riconnetti</button>
+      <span class="spacer"></span>
+      <button type="button" id="close">Chiudi</button>
+    </div>
+  </form>
+  <script src="settings.js"></script>
+</body>
+</html>

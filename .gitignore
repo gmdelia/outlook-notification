@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+.pycache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+*.pem
+credentials*
+*.key
+
+# Logs and local runtime junk
+*.log
+ui-errors.log
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Build / packaging
+dist/
+build/
+*.spec
+*.whl
+
+# Editors / agents (local)
+.cursor/
+.idea/
+.vscode/
+*.swp
+*~
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Playwright browsers must not be vendored in-repo
+# (install with: python -m playwright install chromium)

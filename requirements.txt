@@ -1,0 +1,8 @@
+playwright==1.60.0
+requests>=2.31.0
+urllib3<2
+desktop-notifier>=6.2.0
+pystray>=0.19.0
+Pillow>=10.0.0
+python-dateutil>=2.9.0
+pywebview>=5.0
