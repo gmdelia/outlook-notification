@@ -33,6 +33,7 @@ class OutlookNotifierApp:
         self._stop_event = threading.Event()
         self._login_lock = threading.Lock()
         self._scheduler_started = False
+        self._startup_events_shown = False
         self._events_proc = None
         self._events_sync_lock = threading.Lock()
         self._browser = BrowserSession(self._config.outlook_url)
@@ -79,7 +80,7 @@ class OutlookNotifierApp:
         env = os.environ.copy()
         spawn_gui_module("outlook_notifier.gui.settings_app", env=env)
 
-    def _open_events(self) -> None:
+    def _open_events(self, refresh: bool = True) -> None:
         if self._stop_event.is_set():
             return
         if self._events_proc and self._events_proc.poll() is None:
@@ -94,7 +95,8 @@ class OutlookNotifierApp:
                     pass
         env = os.environ.copy()
         self._events_proc = spawn_gui_module("outlook_notifier.gui.events_app", env=env)
-        threading.Thread(target=self._open_events_worker, daemon=True).start()
+        if refresh:
+            threading.Thread(target=self._open_events_worker, daemon=True).start()
 
     def _open_events_worker(self) -> None:
         if not self._events_sync_lock.acquire(blocking=False):
@@ -154,10 +156,10 @@ class OutlookNotifierApp:
             self._reload_config()
             self._stop_event.wait(2)
 
-    def _initial_sync(self) -> None:
+    def _initial_sync(self) -> bool:
         try:
             if self._stop_event.is_set():
-                return
+                return False
             if not self._browser.has_valid_session():
                 logger.info("Nessuna sessione valida: avvio login browser…")
                 self._set_status("Apertura browser per login…")
@@ -168,33 +170,40 @@ class OutlookNotifierApp:
                 )
                 with self._login_lock:
                     if self._stop_event.is_set():
-                        return
+                        return False
                     returncode = subprocess_registry.run(
                         [sys.executable, "-m", "outlook_notifier.login_app"],
                     )
                 if self._stop_event.is_set():
-                    return
+                    return False
                 if returncode != 0:
                     self._set_status("Login non completato — usa Login dal menu")
-                    return
+                    return False
 
             if self._stop_event.is_set():
-                return
+                return False
             self._scheduler.run_once()
             self._set_status("Connesso")
+            return True
         except Exception as exc:
             if self._stop_event.is_set():
-                return
+                return False
             logger.error("Sincronizzazione iniziale fallita: %s", exc)
             self._set_status(f"Login richiesto — usa Login dal menu")
+            return False
 
     def _startup(self) -> None:
-        self._initial_sync()
+        sync_ok = self._initial_sync()
         if self._stop_event.is_set():
             return
         if not self._scheduler_started:
             self._scheduler.start()
             self._scheduler_started = True
+        if sync_ok:
+            self._reload_config()
+            if self._config.show_events_on_startup and not self._startup_events_shown:
+                self._open_events(refresh=False)
+                self._startup_events_shown = True
 
     def _on_tray_ready(self, _icon) -> None:
         threading.Thread(target=self._watch_flags, daemon=True, name="flags").start()

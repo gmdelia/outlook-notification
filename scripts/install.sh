@@ -30,8 +30,12 @@ pip install -r requirements.txt
 echo ""
 echo "Verifica pywebview..."
 python - <<'PY'
+import importlib.metadata
 import webview
-print(f"pywebview OK ({webview.__version__})")
+
+version = importlib.metadata.version("pywebview")
+assert hasattr(webview, "create_window")
+print(f"pywebview OK ({version})")
 PY
 
 echo ""
@@ -55,6 +59,22 @@ try:
 finally:
     playwright.stop()
 PY
+
+if [ "$(uname -s)" = "Darwin" ]; then
+  echo ""
+  echo "Notifiche macOS (terminal-notifier)..."
+  if command -v brew >/dev/null 2>&1; then
+    if brew list terminal-notifier >/dev/null 2>&1; then
+      echo "terminal-notifier già installato."
+    else
+      brew install terminal-notifier
+    fi
+  else
+    echo "Attenzione: Homebrew non trovato."
+    echo "  Le notifiche popup funzioneranno (fallback osascript), ma il click per aprire Outlook no."
+    echo "  Installa Homebrew e poi: brew install terminal-notifier"
+  fi
+fi
 
 echo ""
 echo "Installazione completata."

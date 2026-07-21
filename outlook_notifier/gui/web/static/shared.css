@@ -276,3 +276,27 @@ button:hover {
 .message.ok {
   color: var(--next);
 }
+
+.notification-panel {
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #f8f9fa;
+}
+
+.notification-status {
+  font-size: 13px;
+  color: var(--subtle);
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.notification-status .warning {
+  color: #b06000;
+  margin-top: 6px;
+}
+
+#test-notification {
+  margin-top: 4px;
+}

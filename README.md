@@ -8,7 +8,7 @@ No Azure app registration or admin consent is required. The app uses your Outloo
 
 - One-time browser login (supports company MFA)
 - Automatic sync every few minutes
-- Configurable reminders (for example 15 and 5 minutes before)
+- Configurable reminders (for example 15 and 5 minutes before), plus always at event start
 - Desktop notifications with popup + sound
 - System tray icon with menu
 - Today’s events window and settings window (native WebView via **pywebview**)
@@ -45,7 +45,7 @@ chmod +x scripts/install.sh scripts/run.sh scripts/verify_gui.sh
 ./scripts/install.sh
 ```
 
-The install script creates a virtualenv, installs Python dependencies (including **pywebview**), and downloads Chromium for Playwright.
+The install script creates a virtualenv, installs Python dependencies (including **pywebview**), downloads Chromium for Playwright, and on **macOS** installs `terminal-notifier` via Homebrew when available (for native notifications with click-to-open).
 
 ### Windows
 
@@ -125,8 +125,10 @@ Open **Impostazioni** from the tray menu.
 
 | Option | Default |
 |--------|---------|
+| Start at login | off (toggle registers OS autostart) |
+| Show events on startup | on |
 | Sync interval | 5 minutes |
-| Reminders | 15, 5 minutes before |
+| Reminders | 15, 5 minutes before (+ always at event start) |
 | Popup notifications | on |
 | Sound | on |
 | Custom sound file | optional |
@@ -135,27 +137,45 @@ Open **Impostazioni** from the tray menu.
 | Timezone (IANA) | system / configured |
 | Outlook URL | `https://outlook.office.com` |
 
-Settings are saved in `config.json` inside the config directory above.
+**Reminder behavior:** The app always sends a notification when a timed event starts (in addition to your configured advance reminders). If a sync was late or the PC was asleep, missed advance reminders are sent on the next successful sync (with a dynamic title based on remaining minutes). The at-start reminder is retried until the event ends.
+
+**Start at login** (`Avvia all'accesso del sistema`) enables or removes the OS login item. The checkbox reflects the real OS state (not only `config.json`):
+
+| Platform | Mechanism |
+|----------|-----------|
+| macOS | LaunchAgent `~/Library/LaunchAgents/com.outlook-notifier.login.plist` |
+| Windows | Registry `HKCU\…\Run\OutlookNotifier` |
+| Linux | `~/.config/autostart/outlook-notifier.desktop` |
+
+Settings (except that OS registration) are saved in `config.json` inside the config directory above.
 
 ## Notifications
 
 ### macOS
 
+Popup banners use [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) installed via Homebrew (`brew install terminal-notifier`). The install script tries to install it automatically when Homebrew is available.
+
+Clicking a reminder notification opens the Outlook Web event page when a `web_link` is available.
+
+If `terminal-notifier` is not installed, the app falls back to `osascript` (popup without click-to-open).
+
+Use **Impostazioni → Prova notifica** to test popup, sound, and click behavior with your current settings.
+
 If banners do not appear:
 
 1. Open **System Settings → Notifications**
-2. Find **Python** or **Outlook Notifier**
+2. Find **terminal-notifier**, **Script Editor**, **osascript**, or **Python**
 3. Allow notifications and banners
 
-The app may also play a system sound (`afplay`) alongside the popup for more reliable audio.
+The app also plays a system sound (`afplay`) alongside the popup for more reliable audio.
 
 ### Windows
 
-Allow notifications for Python / the app in **Settings → System → Notifications**.
+Allow notifications for Python / the app in **Settings → System → Notifications**. Clicking a notification opens the Outlook calendar URL when supported.
 
 ### Linux
 
-Depends on your desktop environment. Ensure a notification daemon is running (for example GNOME, KDE, or a Freedesktop-compatible notifier). Sound support varies by environment.
+Depends on your desktop environment. Ensure a notification daemon is running (for example GNOME, KDE, or a Freedesktop-compatible notifier). Sound support varies by environment. Click-to-open uses the desktop notification handler when available.
 
 ## Local data
 
@@ -203,7 +223,7 @@ Windows use **pywebview**:
 
 ```bash
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-python -c "import webview; print(webview.__version__)"
+python -c "import importlib.metadata, webview; print(importlib.metadata.version('pywebview'))"
 ./scripts/verify_gui.sh            # macOS/Linux helper
 ```
 
@@ -223,6 +243,16 @@ python -c "import webview; print(webview.__version__)"
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 python -m outlook_notifier
 ```
+
+### App icon
+
+The tray and window favicons use [`assets/icon.png`](assets/icon.png) (Outlook blue calendar + notification dot). Regenerate with:
+
+```bash
+python scripts/generate_icon.py
+```
+
+This also updates [`outlook_notifier/gui/web/static/icon.png`](outlook_notifier/gui/web/static/icon.png) for the Settings and Events windows.
 
 Optional GUI probe (macOS/Linux):
 

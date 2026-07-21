@@ -5,6 +5,9 @@ function setMessage(text, kind) {
 }
 
 function fillForm(config) {
+  document.getElementById("start_at_login").checked = !!config.start_at_login;
+  document.getElementById("show_events_on_startup").checked =
+    config.show_events_on_startup !== false;
   document.getElementById("poll_interval_minutes").value = config.poll_interval_minutes ?? 5;
   document.getElementById("reminder_minutes").value = config.reminder_minutes ?? "15, 5";
   document.getElementById("notifications_enabled").checked = !!config.notifications_enabled;
@@ -18,6 +21,8 @@ function fillForm(config) {
 
 function collectForm() {
   return {
+    start_at_login: document.getElementById("start_at_login").checked,
+    show_events_on_startup: document.getElementById("show_events_on_startup").checked,
     poll_interval_minutes: document.getElementById("poll_interval_minutes").value,
     reminder_minutes: document.getElementById("reminder_minutes").value,
     notifications_enabled: document.getElementById("notifications_enabled").checked,
@@ -30,9 +35,36 @@ function collectForm() {
   };
 }
 
+function renderNotificationStatus(status) {
+  const el = document.getElementById("notification-status");
+  const lines = (status.lines || []).map((line) => `<div>${line}</div>`).join("");
+  const warnings = (status.warnings || [])
+    .map((w) => `<div class="warning">${w}</div>`)
+    .join("");
+  el.innerHTML = lines + warnings;
+
+  const testBtn = document.getElementById("test-notification");
+  testBtn.disabled = !status.popup_enabled;
+  testBtn.title = status.popup_enabled
+    ? "Invia una notifica di test"
+    : "Abilita le notifiche popup per provare";
+}
+
+async function refreshNotificationStatus() {
+  if (!window.pywebview || !window.pywebview.api) return;
+  try {
+    const status = await window.pywebview.api.get_notification_status(collectForm());
+    renderNotificationStatus(status);
+  } catch (err) {
+    document.getElementById("notification-status").textContent =
+      "Impossibile leggere lo stato notifiche.";
+  }
+}
+
 async function loadConfig() {
   const config = await window.pywebview.api.get_config();
   fillForm(config);
+  await refreshNotificationStatus();
 }
 
 document.getElementById("settings-form").addEventListener("submit", async (ev) => {
@@ -42,6 +74,7 @@ document.getElementById("settings-form").addEventListener("submit", async (ev) =
   if (result.ok) {
     fillForm(result.config);
     setMessage(result.message, "ok");
+    await refreshNotificationStatus();
   } else {
     setMessage(result.message, "error");
   }
@@ -51,6 +84,7 @@ document.getElementById("browse-sound").addEventListener("click", async () => {
   const result = await window.pywebview.api.browse_sound_file();
   if (result.ok && result.path) {
     document.getElementById("sound_file").value = result.path;
+    await refreshNotificationStatus();
   }
 });
 
@@ -59,8 +93,22 @@ document.getElementById("reconnect").addEventListener("click", async () => {
   setMessage(result.message, "ok");
 });
 
+document.getElementById("test-notification").addEventListener("click", async () => {
+  setMessage("Invio notifica di test…");
+  const result = await window.pywebview.api.test_notification(collectForm());
+  setMessage(result.message, result.ok ? "ok" : "error");
+});
+
 document.getElementById("close").addEventListener("click", async () => {
   await window.pywebview.api.close_window();
+});
+
+document.getElementById("notifications_enabled").addEventListener("change", () => {
+  refreshNotificationStatus();
+});
+
+document.getElementById("sound_enabled").addEventListener("change", () => {
+  refreshNotificationStatus();
 });
 
 window.addEventListener("pywebviewready", () => {

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+import math
 import threading
 from datetime import date, datetime, time as dt_time, timedelta
-from typing import Callable, Optional
+from typing import Callable, Literal, Optional
 
 from outlook_notifier import events_store
 from outlook_notifier.browser_session import BrowserSession
@@ -15,6 +16,8 @@ from outlook_notifier.notifier import EventNotifier
 from outlook_notifier.state import ReminderState
 
 logger = logging.getLogger(__name__)
+
+ReminderSendMode = Literal["normal", "catchup"]
 
 
 class ReminderScheduler:
@@ -110,6 +113,55 @@ class ReminderScheduler:
             logger.error("Errore sincronizzazione: %s", exc)
             self._notify_status(f"Errore: {exc}")
 
+    def _reminder_send_mode(
+        self,
+        now: datetime,
+        event: CalendarEvent,
+        reminder_min: int,
+        poll_window: timedelta,
+    ) -> Optional[ReminderSendMode]:
+        if self._state.was_sent(event.id, reminder_min, event.start):
+            return None
+
+        trigger_at = event.start - timedelta(minutes=reminder_min)
+        window_end = trigger_at + poll_window
+
+        if trigger_at <= now < window_end:
+            return "normal"
+        if now < trigger_at:
+            return None
+
+        catchup_limit = event.end if reminder_min == 0 else event.start
+        if now < catchup_limit:
+            return "catchup"
+        return None
+
+    def _all_day_send_mode(
+        self,
+        now: datetime,
+        event: CalendarEvent,
+        trigger_at: datetime,
+        poll_window: timedelta,
+        reminder_key: int,
+    ) -> Optional[ReminderSendMode]:
+        if self._state.was_sent(event.id, reminder_key, event.start):
+            return None
+
+        window_end = trigger_at + poll_window
+        day_end = datetime.combine(
+            date.today() + timedelta(days=1),
+            dt_time.min,
+            tzinfo=now.tzinfo,
+        )
+
+        if trigger_at <= now < window_end:
+            return "normal"
+        if now < trigger_at:
+            return None
+        if now < day_end:
+            return "catchup"
+        return None
+
     def _process_events(self, events: list[CalendarEvent]) -> None:
         now = datetime.now().astimezone()
         poll_window = timedelta(minutes=max(1, self._config.poll_interval_minutes))
@@ -119,16 +171,12 @@ class ReminderScheduler:
                 self._process_all_day_event(event, now)
                 continue
 
-            for reminder_min in self._config.reminder_minutes_sorted():
-                if self._state.was_sent(event.id, reminder_min, event.start):
+            for reminder_min in self._config.effective_reminder_minutes():
+                mode = self._reminder_send_mode(now, event, reminder_min, poll_window)
+                if mode is None:
                     continue
-
-                trigger_at = event.start - timedelta(minutes=reminder_min)
-                window_end = trigger_at + poll_window
-
-                if trigger_at <= now < window_end:
-                    self._send_reminder(event, reminder_min)
-                    self._state.mark_sent(event.id, reminder_min, event.start)
+                self._send_reminder(event, reminder_min, catchup=mode == "catchup")
+                self._state.mark_sent(event.id, reminder_min, event.start)
 
     def _process_all_day_event(self, event: CalendarEvent, now: datetime) -> None:
         if not self._config.notify_all_day_events:
@@ -147,19 +195,28 @@ class ReminderScheduler:
         poll_window = timedelta(minutes=max(1, self._config.poll_interval_minutes))
         reminder_key = 0
 
-        if self._state.was_sent(event.id, reminder_key, event.start):
+        mode = self._all_day_send_mode(now, event, trigger_at, poll_window, reminder_key)
+        if mode is None:
             return
 
-        if trigger_at <= now < trigger_at + poll_window:
-            self._send_reminder(event, reminder_key, all_day=True)
-            self._state.mark_sent(event.id, reminder_key, event.start)
+        self._send_reminder(event, reminder_key, all_day=True, catchup=mode == "catchup")
+        self._state.mark_sent(event.id, reminder_key, event.start)
+
+    def _timed_reminder_title(self, event: CalendarEvent, now: datetime) -> str:
+        seconds_until_start = (event.start - now).total_seconds()
+        if seconds_until_start > 0:
+            remaining = max(1, math.ceil(seconds_until_start / 60))
+            return f"Tra {remaining} min: {event.subject}"
+        return f"Ora: {event.subject}"
 
     def _send_reminder(
         self,
         event: CalendarEvent,
         reminder_minutes: int,
         all_day: bool = False,
+        catchup: bool = False,
     ) -> None:
+        now = datetime.now().astimezone()
         if all_day:
             body = f"{event.display_time}"
             if event.location:
@@ -169,13 +226,13 @@ class ReminderScheduler:
             body = f"Inizia alle {event.start.strftime('%H:%M')}"
             if event.location:
                 body += f"\n{event.location}"
-            if reminder_minutes > 0:
-                title = f"Tra {reminder_minutes} min: {event.subject}"
-            else:
-                title = f"Ora: {event.subject}"
+            title = self._timed_reminder_title(event, now)
 
-        logger.info("Reminder: %s — %s", title, body)
-        self._notifier.notify(title, body, self._config)
+        if catchup:
+            logger.info("Reminder recupero: %s — %s", title, body)
+        else:
+            logger.info("Reminder: %s — %s", title, body)
+        self._notifier.notify(title, body, self._config, url=event.web_link or None)
 
     def _notify_status(self, message: str) -> None:
         if self._on_status_change:

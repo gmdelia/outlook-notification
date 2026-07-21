@@ -39,6 +39,7 @@ class AppConfig:
     all_day_reminder_time: str = "09:00"
     notify_all_day_events: bool = True
     timezone: str = ""
+    show_events_on_startup: bool = True
 
     @classmethod
     def load(cls) -> "AppConfig":
@@ -58,6 +59,7 @@ class AppConfig:
                 all_day_reminder_time=data.get("all_day_reminder_time", "09:00"),
                 notify_all_day_events=bool(data.get("notify_all_day_events", True)),
                 timezone=data.get("timezone", ""),
+                show_events_on_startup=bool(data.get("show_events_on_startup", True)),
             )
         except (json.JSONDecodeError, TypeError, ValueError):
             return cls()
@@ -71,6 +73,10 @@ class AppConfig:
 
     def reminder_minutes_sorted(self) -> List[int]:
         return sorted({m for m in self.reminder_minutes if m > 0}, reverse=True)
+
+    def effective_reminder_minutes(self) -> List[int]:
+        """Configured advance reminders plus always-on reminder at event start (0 min)."""
+        return sorted({*self.reminder_minutes, 0}, reverse=True)
 
     def effective_timezone(self) -> str:
         return self.timezone or detect_local_timezone()
