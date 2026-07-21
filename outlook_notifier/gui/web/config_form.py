@@ -5,11 +5,14 @@ from __future__ import annotations
 from typing import Any, Dict, Tuple
 from zoneinfo import ZoneInfo
 
+from outlook_notifier import autostart
 from outlook_notifier.config import AppConfig
 
 
 def config_to_dict(config: AppConfig) -> Dict[str, Any]:
     return {
+        "start_at_login": autostart.is_enabled(),
+        "show_events_on_startup": config.show_events_on_startup,
         "poll_interval_minutes": config.poll_interval_minutes,
         "reminder_minutes": ", ".join(str(m) for m in config.reminder_minutes),
         "notifications_enabled": config.notifications_enabled,
@@ -20,6 +23,21 @@ def config_to_dict(config: AppConfig) -> Dict[str, Any]:
         "timezone": config.effective_timezone(),
         "outlook_url": config.outlook_url,
     }
+
+
+def form_to_config(data: Dict[str, Any]) -> AppConfig:
+    """Build AppConfig from form values without saving (for notification preview/test)."""
+    config = AppConfig.load()
+    if not data:
+        return config
+
+    config.notifications_enabled = bool(data.get("notifications_enabled", config.notifications_enabled))
+    config.sound_enabled = bool(data.get("sound_enabled", config.sound_enabled))
+    config.sound_file = str(data.get("sound_file", config.sound_file)).strip()
+    outlook_url = str(data.get("outlook_url", config.outlook_url)).strip()
+    if outlook_url:
+        config.outlook_url = outlook_url
+    return config
 
 
 def validate_and_save(data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
@@ -64,5 +82,18 @@ def validate_and_save(data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
     config.notify_all_day_events = bool(data.get("notify_all_day_events", True))
     config.all_day_reminder_time = time_value
     config.outlook_url = str(data.get("outlook_url", "")).strip() or "https://outlook.office.com"
+    config.show_events_on_startup = bool(data.get("show_events_on_startup", True))
     config.save()
+
+    want_autostart = bool(data.get("start_at_login", False))
+    try:
+        if want_autostart != autostart.is_enabled():
+            autostart.set_enabled(want_autostart)
+    except Exception as exc:
+        return (
+            False,
+            f"Impostazioni salvate, ma avvio automatico non aggiornato: {exc}",
+            config_to_dict(config),
+        )
+
     return True, "Impostazioni salvate.", config_to_dict(config)

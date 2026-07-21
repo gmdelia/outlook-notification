@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import platform
+import shutil
 import subprocess
 import threading
+import webbrowser
 from pathlib import Path
 
 from desktop_notifier import DEFAULT_SOUND, DesktopNotifier
@@ -16,6 +19,14 @@ from outlook_notifier.config import AppConfig
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAC_SOUND = "/System/Library/Sounds/Glass.aiff"
+NOTIFICATION_GROUP = "outlook-notifier"
+
+
+def mac_terminal_notifier_path() -> Path | None:
+    path = shutil.which("terminal-notifier")
+    if path:
+        return Path(path)
+    return None
 
 # AppleScript: argv avoids shell/string escaping issues with titles/messages.
 _OSASCRIPT_NOTIFY = """
@@ -69,16 +80,15 @@ class EventNotifier:
         title: str,
         message: str,
         config: AppConfig | None = None,
-        *,
-        wait: bool = False,
+        url: str | None = None,
     ) -> None:
         cfg = config or self._config
         if not cfg.notifications_enabled:
             return
 
         if self._loop and self._loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(
-                self._send_popup(title, message, cfg),
+            asyncio.run_coroutine_threadsafe(
+                self._send_popup(title, message, cfg, url),
                 self._loop,
             )
             if wait:
@@ -91,45 +101,64 @@ class EventNotifier:
         if cfg.sound_enabled:
             self._play_sound(cfg)
 
-    def send_test(self) -> None:
-        """Send a one-shot native notification (for Settings → Prova notifica)."""
-        cfg = AppConfig.load()
-        # Force popup even if notifications were disabled, so the user can verify OS permissions.
-        cfg.notifications_enabled = True
-        self.notify(
-            "Outlook Notifier",
-            "Notifica di prova. Se vedi questo banner, le notifiche native funzionano.",
-            cfg,
-            wait=True,
-        )
-
-    async def _send_popup(self, title: str, message: str, config: AppConfig) -> None:
+    async def _send_popup(
+        self,
+        title: str,
+        message: str,
+        config: AppConfig,
+        url: str | None = None,
+    ) -> None:
         try:
-            if self._use_osascript:
-                await asyncio.to_thread(self._send_osascript, title, message)
-            elif self._notifier is not None:
-                await self._notifier.send(
-                    title=title,
-                    message=message,
-                    sound=DEFAULT_SOUND if config.sound_enabled else None,
-                )
-            else:
-                logger.error("Nessun backend notifica disponibile")
+            if platform.system() == "Darwin":
+                from desktop_notifier.backends.macos_support import is_bundle
+
+                if not is_bundle():
+                    self._send_macos_popup(title, message, url)
+                    return
+
+            on_clicked = None
+            if url:
+                on_clicked = lambda: webbrowser.open(url)
+
+            await self._notifier.send(
+                title=title,
+                message=message,
+                sound=DEFAULT_SOUND if config.sound_enabled else None,
+                on_clicked=on_clicked,
+            )
         except Exception as exc:
             logger.error("Errore notifica desktop: %s", exc)
 
-    def _send_osascript(self, title: str, message: str) -> None:
-        result = subprocess.run(
-            ["osascript", "-e", _OSASCRIPT_NOTIFY, title, message],
-            capture_output=True,
-            text=True,
-            timeout=15,
+    def _send_macos_popup(self, title: str, message: str, url: str | None = None) -> None:
+        notifier_path = mac_terminal_notifier_path()
+        if notifier_path:
+            cmd = [
+                str(notifier_path),
+                "-title",
+                title,
+                "-message",
+                message,
+                "-group",
+                NOTIFICATION_GROUP,
+            ]
+            if url:
+                cmd.extend(["-open", url])
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+
+        script = (
+            f"display notification {json.dumps(message)} "
+            f"with title {json.dumps(title)}"
         )
-        if result.returncode != 0:
-            err = (result.stderr or result.stdout or "").strip() or f"exit {result.returncode}"
-            logger.error("osascript display notification fallito: %s", err)
-            raise RuntimeError(err)
-        logger.info("Notifica native inviata: %s", title)
+        subprocess.Popen(
+            ["osascript", "-e", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     def _play_sound(self, config: AppConfig) -> None:
         sound_path = self._resolve_sound_file(config.sound_file)

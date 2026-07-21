@@ -85,8 +85,8 @@ def run_settings_app(probe: bool = False) -> None:
             url=SETTINGS_HTML.resolve().as_uri(),
             js_api=api,
             width=520,
-            height=640,
-            min_size=(420, 480),
+            height=700,
+            min_size=(420, 520),
         )
         webview.start()
     except Exception as exc:

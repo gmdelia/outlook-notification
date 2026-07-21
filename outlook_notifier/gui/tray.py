@@ -11,20 +11,91 @@ from PIL import Image, ImageDraw
 
 logger = logging.getLogger(__name__)
 
+OUTLOOK_BLUE = (0, 120, 212, 255)
+TRAY_ICON_SIZE = 64
+ASSETS_DIR = Path(__file__).resolve().parent.parent.parent / "assets"
 
-def _default_icon(size: int = 64) -> Image.Image:
-    image = Image.new("RGBA", (size, size), (0, 120, 212, 255))
+
+def _draw_icon(size: int) -> Image.Image:
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    draw.ellipse((8, 8, size - 8, size - 8), fill=(255, 255, 255, 255))
-    draw.rectangle((size // 2 - 4, 18, size // 2 + 4, size - 18), fill=(0, 120, 212, 255))
-    draw.rectangle((18, size // 2 - 4, size - 18, size // 2 + 4), fill=(0, 120, 212, 255))
+
+    margin = size // 8
+    radius = size // 5
+    draw.rounded_rectangle(
+        (margin, margin, size - margin, size - margin),
+        radius=radius,
+        fill=OUTLOOK_BLUE,
+    )
+
+    cal_left = size * 0.22
+    cal_top = size * 0.24
+    cal_right = size * 0.78
+    cal_bottom = size * 0.78
+    cal_radius = max(1, size // 24)
+
+    draw.rounded_rectangle(
+        (cal_left, cal_top, cal_right, cal_bottom),
+        radius=cal_radius,
+        fill=(255, 255, 255, 255),
+    )
+
+    header_h = (cal_bottom - cal_top) * 0.22
+    draw.rectangle(
+        (cal_left, cal_top, cal_right, cal_top + header_h),
+        fill=(230, 240, 250, 255),
+    )
+
+    ring_r = max(1, size // 28)
+    ring_y = cal_top + header_h * 0.45
+    for ring_x in (cal_left + (cal_right - cal_left) * 0.32, cal_left + (cal_right - cal_left) * 0.68):
+        draw.ellipse(
+            (ring_x - ring_r, ring_y - ring_r, ring_x + ring_r, ring_y + ring_r),
+            fill=OUTLOOK_BLUE,
+        )
+
+    grid_top = cal_top + header_h + (cal_bottom - cal_top - header_h) * 0.12
+    grid_left = cal_left + (cal_right - cal_left) * 0.15
+    grid_right = cal_right - (cal_right - cal_left) * 0.15
+    grid_bottom = cal_bottom - (cal_bottom - cal_top) * 0.12
+    cell_w = (grid_right - grid_left) / 2
+    cell_h = (grid_bottom - grid_top) / 2
+    line_w = max(1, size // 128)
+
+    for i in range(1, 2):
+        y = grid_top + cell_h * i
+        draw.line((grid_left, y, grid_right, y), fill=OUTLOOK_BLUE, width=line_w)
+    for i in range(1, 2):
+        x = grid_left + cell_w * i
+        draw.line((x, grid_top, x, grid_bottom), fill=OUTLOOK_BLUE, width=line_w)
+
+    dot_r = max(2, size // 14)
+    dot_cx = size * 0.76
+    dot_cy = size * 0.22
+    draw.ellipse(
+        (dot_cx - dot_r, dot_cy - dot_r, dot_cx + dot_r, dot_cy + dot_r),
+        fill=(255, 140, 0, 255),
+    )
+    inner_r = dot_r * 0.55
+    draw.ellipse(
+        (dot_cx - inner_r, dot_cy - inner_r, dot_cx + inner_r, dot_cy + inner_r),
+        fill=(255, 255, 255, 255),
+    )
+
     return image
 
 
+def _default_icon(size: int = TRAY_ICON_SIZE) -> Image.Image:
+    return _draw_icon(size)
+
+
 def _load_icon() -> Image.Image:
-    icon_path = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.png"
+    icon_path = ASSETS_DIR / "icon.png"
     if icon_path.exists():
-        return Image.open(icon_path).convert("RGBA")
+        return Image.open(icon_path).convert("RGBA").resize(
+            (TRAY_ICON_SIZE, TRAY_ICON_SIZE),
+            Image.Resampling.LANCZOS,
+        )
     return _default_icon()
 
 

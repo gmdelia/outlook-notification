@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Outlook Notifier — Impostazioni</title>
+  <link rel="icon" type="image/png" href="icon.png" />
   <link rel="stylesheet" href="shared.css" />
 </head>
 <body>
@@ -12,6 +13,16 @@
     <div class="status">Modifica le impostazioni e salva</div>
   </div>
   <form id="settings-form">
+    <label class="checkbox">
+      <input type="checkbox" id="start_at_login" />
+      Avvia all'accesso del sistema
+    </label>
+
+    <label class="checkbox">
+      <input type="checkbox" id="show_events_on_startup" />
+      Mostra eventi di oggi al primo avvio
+    </label>
+
     <label>
       Intervallo sincronizzazione (minuti)
       <input type="number" id="poll_interval_minutes" min="1" required />
@@ -20,6 +31,7 @@
     <label>
       Promemoria prima dell'evento (minuti, separati da virgola)
       <input type="text" id="reminder_minutes" required />
+      <span class="subtle">Viene sempre inviato anche un promemoria all'ora di inizio evento.</span>
     </label>
 
     <label class="checkbox">
@@ -35,6 +47,12 @@
       <input type="checkbox" id="sound_enabled" />
       Abilita suono
     </label>
+
+    <div class="notification-panel">
+      <div class="section-title">Stato notifiche</div>
+      <div id="notification-status" class="notification-status">Caricamento…</div>
+      <button type="button" id="test-notification">Prova notifica</button>
+    </div>
 
     <label>
       File suono personalizzato (opzionale)

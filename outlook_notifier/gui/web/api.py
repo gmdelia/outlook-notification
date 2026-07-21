@@ -11,7 +11,9 @@ import webview
 
 from outlook_notifier import events_store
 from outlook_notifier.config import AppConfig, CONFIG_DIR
-from outlook_notifier.gui.web.config_form import config_to_dict, validate_and_save
+from outlook_notifier.gui.web.config_form import config_to_dict, form_to_config, validate_and_save
+from outlook_notifier.notification_status import demo_calendar_url, get_notification_status
+from outlook_notifier.notifier import EventNotifier
 
 RECONNECT_FLAG = CONFIG_DIR / "reconnect_requested"
 
@@ -127,3 +129,28 @@ class SettingsApi:
     def close_window(self) -> None:
         if webview.windows:
             webview.windows[0].destroy()
+
+    def get_notification_status(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        config = form_to_config(data or {})
+        return get_notification_status(config)
+
+    def test_notification(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        config = form_to_config(data or {})
+        if not config.notifications_enabled:
+            return {
+                "ok": False,
+                "message": "Abilita le notifiche popup per provare.",
+            }
+
+        notifier = EventNotifier(config)
+        try:
+            notifier.notify(
+                "Outlook Notifier — Prova",
+                "Questa è una notifica di test. Clicca per aprire il calendario Outlook.",
+                config,
+                url=demo_calendar_url(config),
+            )
+        finally:
+            notifier.shutdown()
+
+        return {"ok": True, "message": "Notifica di test inviata."}
