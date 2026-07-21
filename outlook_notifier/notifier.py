@@ -28,11 +28,37 @@ def mac_terminal_notifier_path() -> Path | None:
         return Path(path)
     return None
 
+# AppleScript: argv avoids shell/string escaping issues with titles/messages.
+_OSASCRIPT_NOTIFY = """
+on run argv
+  display notification (item 2 of argv) with title (item 1 of argv)
+end run
+"""
+
+
+def _macos_is_bundle() -> bool:
+    if platform.system() != "Darwin":
+        return False
+    try:
+        from desktop_notifier.backends.macos_support import is_bundle
+
+        return bool(is_bundle())
+    except Exception:
+        return False
+
 
 class EventNotifier:
     def __init__(self, config: AppConfig) -> None:
         self._config = config
-        self._notifier = DesktopNotifier(app_name="Outlook Notifier")
+        self._use_osascript = platform.system() == "Darwin" and not _macos_is_bundle()
+        self._notifier: DesktopNotifier | None = None
+        if not self._use_osascript:
+            self._notifier = DesktopNotifier(app_name="Outlook Notifier")
+        else:
+            logger.info(
+                "macOS: processo non in un .app — uso notifiche native via AppleScript "
+                "(abilita banner per Script Editor / osascript in Impostazioni di Sistema → Notifiche)."
+            )
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._ready = threading.Event()
@@ -65,6 +91,12 @@ class EventNotifier:
                 self._send_popup(title, message, cfg, url),
                 self._loop,
             )
+            if wait:
+                future.result(timeout=20)
+        else:
+            logger.warning("Loop notifiche non attivo: popup saltato (%s)", title)
+            if wait:
+                raise RuntimeError("Loop notifiche non attivo")
 
         if cfg.sound_enabled:
             self._play_sound(cfg)

@@ -151,6 +151,8 @@ Settings (except that OS registration) are saved in `config.json` inside the con
 
 ## Notifications
 
+Reminders are sent by the **tray process in the background**. You do not need the Events or Settings windows open.
+
 ### macOS
 
 Popup banners use [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) installed via Homebrew (`brew install terminal-notifier`). The install script tries to install it automatically when Homebrew is available.
@@ -184,6 +186,8 @@ Depends on your desktop environment. Ensure a notification daemon is running (fo
 ├── config.json               # settings
 ├── state.json                # reminders already sent today
 ├── events_today.json         # cached events for the UI
+├── launchd/                  # macOS: scheduled reminder jobs (plist)
+├── launchd_jobs.json         # macOS: active launchd job labels
 ├── session.ok                # login marker
 └── browser_profile/          # Outlook Web browser session
 ```

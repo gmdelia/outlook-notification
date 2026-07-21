@@ -75,6 +75,24 @@ h1 {
   color: var(--fg);
 }
 
+.allday-item.clickable,
+.event-row.clickable {
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.allday-item.clickable:hover {
+  background: #f1f3f4;
+}
+
+.event-row.clickable:hover {
+  background: #f1f3f4;
+}
+
+.event-row.clickable:hover .subject {
+  text-decoration: underline;
+}
+
 .timeline {
   position: relative;
   margin-top: 8px;
@@ -95,7 +113,7 @@ h1 {
   position: relative;
   min-height: 44px;
   margin-bottom: 10px;
-  padding-left: 18px;
+  padding: 4px 8px 4px 18px;
 }
 
 .event-row .dot {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
+import time
 from datetime import date, datetime, time as dt_time, timedelta
 from typing import Callable, Literal, Optional
 
@@ -13,6 +14,7 @@ from outlook_notifier.browser_session import BrowserSession
 from outlook_notifier.config import AppConfig
 from outlook_notifier.event import CalendarEvent
 from outlook_notifier.notifier import EventNotifier
+from outlook_notifier.reminder_content import format_reminder, reminder_identifier
 from outlook_notifier.state import ReminderState
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,7 @@ class ReminderScheduler:
         self._thread: Optional[threading.Thread] = None
         self._last_error = ""
         self._tick_lock = threading.Lock()
+        self._os_scheduled: Set[str] = set()
 
     @property
     def last_error(self) -> str:
@@ -88,8 +91,31 @@ class ReminderScheduler:
             else:
                 logger.info("Sincronizzazione già in corso, ciclo scheduler salta questo giro.")
             interval = max(1, self._config.poll_interval_minutes) * 60
-            if self._internal_stop.wait(interval):
+            if self._wait_for_next_tick(interval):
                 break
+
+    def _wait_for_next_tick(self, interval: float) -> bool:
+        """Wait until the next poll. Returns True if the scheduler should stop."""
+        deadline = time.time() + interval
+        while time.time() < deadline:
+            if self._is_stopping():
+                return True
+            remaining = deadline - time.time()
+            wait_for = min(_WAIT_CHUNK_SECONDS, remaining)
+            wall_before = time.time()
+            mono_before = time.monotonic()
+            if self._internal_stop.wait(wait_for):
+                return True
+            wall_elapsed = time.time() - wall_before
+            mono_elapsed = time.monotonic() - mono_before
+            drift = wall_elapsed - mono_elapsed
+            if drift > _WAKE_DRIFT_SECONDS:
+                logger.info(
+                    "Risveglio sistema rilevato (sospensione ~%.0fs), sync immediata",
+                    drift,
+                )
+                return False
+        return False
 
     def _tick(self) -> None:
         if self._is_stopping():
@@ -102,6 +128,7 @@ class ReminderScheduler:
             events_store.save_events(events)
             self._last_error = ""
             self._notify_status("Sincronizzato")
+            self._reschedule_os_notifications(events)
             self._process_events(events)
         except PermissionError as exc:
             self._last_error = str(exc)
@@ -164,7 +191,6 @@ class ReminderScheduler:
 
     def _process_events(self, events: list[CalendarEvent]) -> None:
         now = datetime.now().astimezone()
-        poll_window = timedelta(minutes=max(1, self._config.poll_interval_minutes))
 
         for event in events:
             if event.is_all_day:
@@ -192,7 +218,6 @@ class ReminderScheduler:
             dt_time(hour, minute),
             tzinfo=now.tzinfo,
         )
-        poll_window = timedelta(minutes=max(1, self._config.poll_interval_minutes))
         reminder_key = 0
 
         mode = self._all_day_send_mode(now, event, trigger_at, poll_window, reminder_key)
@@ -213,6 +238,7 @@ class ReminderScheduler:
         self,
         event: CalendarEvent,
         reminder_minutes: int,
+        *,
         all_day: bool = False,
         catchup: bool = False,
     ) -> None:
