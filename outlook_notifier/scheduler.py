@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import math
+import platform
 import threading
 import time
 from datetime import date, datetime, time as dt_time, timedelta
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal, Optional, Set
 
 from outlook_notifier import events_store
 from outlook_notifier.browser_session import BrowserSession
@@ -18,6 +19,9 @@ from outlook_notifier.reminder_content import format_reminder, reminder_identifi
 from outlook_notifier.state import ReminderState
 
 logger = logging.getLogger(__name__)
+
+_WAKE_DRIFT_SECONDS = 30
+_WAIT_CHUNK_SECONDS = 15
 
 ReminderSendMode = Literal["normal", "catchup"]
 
@@ -140,6 +144,14 @@ class ReminderScheduler:
             logger.error("Errore sincronizzazione: %s", exc)
             self._notify_status(f"Errore: {exc}")
 
+    def _reschedule_os_notifications(self, events: list[CalendarEvent]) -> None:
+        if platform.system() != "Darwin":
+            self._os_scheduled.clear()
+            return
+        from outlook_notifier.macos_scheduled_notifications import reschedule
+
+        self._os_scheduled = reschedule(events, self._config)
+
     def _reminder_send_mode(
         self,
         now: datetime,
@@ -191,20 +203,30 @@ class ReminderScheduler:
 
     def _process_events(self, events: list[CalendarEvent]) -> None:
         now = datetime.now().astimezone()
+        poll_window = timedelta(minutes=max(1, self._config.poll_interval_minutes))
 
         for event in events:
             if event.is_all_day:
-                self._process_all_day_event(event, now)
+                self._process_all_day_event(event, now, poll_window)
                 continue
 
             for reminder_min in self._config.effective_reminder_minutes():
+                ident = reminder_identifier(event.id, reminder_min, event.start)
+                if ident in self._os_scheduled:
+                    continue
+
                 mode = self._reminder_send_mode(now, event, reminder_min, poll_window)
                 if mode is None:
                     continue
                 self._send_reminder(event, reminder_min, catchup=mode == "catchup")
                 self._state.mark_sent(event.id, reminder_min, event.start)
 
-    def _process_all_day_event(self, event: CalendarEvent, now: datetime) -> None:
+    def _process_all_day_event(
+        self,
+        event: CalendarEvent,
+        now: datetime,
+        poll_window: timedelta,
+    ) -> None:
         if not self._config.notify_all_day_events:
             return
 
@@ -219,6 +241,10 @@ class ReminderScheduler:
             tzinfo=now.tzinfo,
         )
         reminder_key = 0
+
+        ident = reminder_identifier(event.id, reminder_key, event.start)
+        if ident in self._os_scheduled:
+            return
 
         mode = self._all_day_send_mode(now, event, trigger_at, poll_window, reminder_key)
         if mode is None:
