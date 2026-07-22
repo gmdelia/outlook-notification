@@ -81,13 +81,15 @@ class EventNotifier:
         message: str,
         config: AppConfig | None = None,
         url: str | None = None,
+        *,
+        wait: bool = False,
     ) -> None:
         cfg = config or self._config
         if not cfg.notifications_enabled:
             return
 
         if self._loop and self._loop.is_running():
-            asyncio.run_coroutine_threadsafe(
+            future = asyncio.run_coroutine_threadsafe(
                 self._send_popup(title, message, cfg, url),
                 self._loop,
             )
@@ -100,6 +102,17 @@ class EventNotifier:
 
         if cfg.sound_enabled:
             self._play_sound(cfg)
+
+    def send_test(self) -> None:
+        """Send a one-shot native notification (for Settings → Prova notifica)."""
+        cfg = AppConfig.load()
+        cfg.notifications_enabled = True
+        self.notify(
+            "Outlook Notifier",
+            "Notifica di prova. Se vedi questo banner, le notifiche native funzionano.",
+            cfg,
+            wait=True,
+        )
 
     async def _send_popup(
         self,

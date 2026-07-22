@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import plistlib
 import platform
 import subprocess
 import sys
 from datetime import date, datetime, time as dt_time, timedelta
+from pathlib import Path
 from typing import Set
 
 from outlook_notifier.config import CONFIG_DIR, AppConfig
@@ -21,6 +23,14 @@ logger = logging.getLogger(__name__)
 _LAUNCHD_DIR = CONFIG_DIR / "launchd"
 _MANIFEST = CONFIG_DIR / "launchd_jobs.json"
 _LABEL_PREFIX = "com.outlook-notifier.reminder."
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def _python() -> str:
+    return sys.executable
 
 
 def is_available() -> bool:
@@ -115,7 +125,7 @@ def _submit_job(
     plist = {
         "Label": label,
         "ProgramArguments": [
-            sys.executable,
+            _python(),
             "-m",
             "outlook_notifier.macos_notify_cli",
             "--label",
@@ -125,11 +135,15 @@ def _submit_job(
             "--message",
             body,
         ],
+        "WorkingDirectory": str(_project_root()),
         "StartCalendarInterval": {
             "Month": trigger_at.month,
             "Day": trigger_at.day,
             "Hour": trigger_at.hour,
             "Minute": trigger_at.minute,
+        },
+        "EnvironmentVariables": {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
         },
         "StandardOutPath": str(CONFIG_DIR / "launchd.log"),
         "StandardErrorPath": str(CONFIG_DIR / "launchd.log"),
