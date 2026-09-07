@@ -94,7 +94,8 @@ To force a fresh login:
 **macOS / Linux**
 
 ```bash
-rm ~/.outlook-notifier/session.ok
+rm -f ~/.outlook-notifier/session.ok
+rm -rf ~/.outlook-notifier/browser_profile
 ./scripts/run.sh
 ```
 
@@ -102,10 +103,12 @@ rm ~/.outlook-notifier/session.ok
 
 ```bat
 del %USERPROFILE%\.outlook-notifier\session.ok
+rmdir /s /q %USERPROFILE%\.outlook-notifier\browser_profile
 .venv\Scripts\activate
 python -m outlook_notifier
 ```
 
+`Riconnetti` from the tray also clears the browser profile automatically so Microsoft shows a fresh password/MFA form.
 ## Using the app
 
 After start, look for the **Outlook Notifier** icon in the system tray (menu bar / notification area).
@@ -114,9 +117,9 @@ After start, look for the **Outlook Notifier** icon in the system tray (menu bar
 |------------------------|---------|
 | **Eventi di oggi** | Open today’s events timeline |
 | **Impostazioni** | Open settings |
-| **Login Outlook** | Open the login browser |
+| **Login Outlook** | Open the login browser (keeps cookies; use if session expired lightly) |
 | **Sincronizza ora** | Sync calendar now |
-| **Riconnetti** | Clear session and log in again |
+| **Riconnetti** | Wipe browser profile + session and log in again (use after password change) |
 | **Esci** | Quit the app |
 
 ## Settings

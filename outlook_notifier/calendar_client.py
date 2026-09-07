@@ -15,6 +15,8 @@ from outlook_notifier.event import CalendarEvent
 
 logger = logging.getLogger(__name__)
 
+GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
+
 
 class CalendarClient:
     def __init__(self, outlook_url: str = "https://outlook.office.com", tz_name: str | None = None) -> None:
@@ -34,7 +36,39 @@ class CalendarClient:
                 events.append(event)
         return events
 
+    def fetch_via_graph_api(self, token: str) -> List[CalendarEvent]:
+        """Preferred REST fallback — Microsoft Graph is the only supported
+        endpoint for calendar data (the legacy Outlook REST API v2.0 used by
+        fetch_via_rest_api was fully decommissioned by Microsoft in March
+        2024 and now fails for every request)."""
+        today = date.today()
+        start = datetime.combine(today, time.min, tzinfo=self._tz)
+        end = start + timedelta(days=1)
+
+        params = {
+            "startDateTime": start.isoformat(),
+            "endDateTime": end.isoformat(),
+            "$top": "100",
+            "$select": "id,subject,start,end,location,isAllDay,webLink",
+        }
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Prefer": f'outlook.timezone="{self._tz.key}"',
+        }
+
+        response = requests.get(
+            f"{GRAPH_API_BASE}/me/calendarView",
+            params=params,
+            headers=headers,
+            timeout=30,
+        )
+        return self._handle_calendar_response(response)
+
     def fetch_via_rest_api(self, token: str) -> List[CalendarEvent]:
+        """Legacy Outlook REST API v2.0 — decommissioned by Microsoft since
+        March 2024 (requests now fail for every tenant). Kept only as a
+        last-resort fallback in case fetch_via_graph_api can't be used
+        (e.g. no Graph-scoped token was captured)."""
         today = date.today()
         start = datetime.combine(today, time.min, tzinfo=self._tz)
         end = start + timedelta(days=1)
@@ -56,6 +90,9 @@ class CalendarClient:
             headers=headers,
             timeout=30,
         )
+        return self._handle_calendar_response(response)
+
+    def _handle_calendar_response(self, response) -> List[CalendarEvent]:
         if response.status_code == 401:
             raise PermissionError("Token scaduto — riconnessione necessaria.")
         if response.status_code == 403:
@@ -63,6 +100,10 @@ class CalendarClient:
                 "Accesso calendario negato dal tenant. "
                 "Verifica di poter vedere il calendario in Outlook Web."
             )
+        if response.status_code == 410:
+            # Endpoint gone (e.g. the decommissioned Outlook REST API v2.0)
+            # — not a credentials problem, retrying login won't fix this.
+            raise RuntimeError("Endpoint calendario non più disponibile (410 Gone).")
         response.raise_for_status()
         return self.parse_events_from_response(response.json())
 
