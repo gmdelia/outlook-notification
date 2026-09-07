@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 _WAKE_DRIFT_SECONDS = 30
 _WAIT_CHUNK_SECONDS = 15
+_LOGIN_RETRY_COOLDOWN_SECONDS = 900
 
 ReminderSendMode = Literal["normal", "catchup"]
 
@@ -89,7 +90,14 @@ class ReminderScheduler:
         while not self._is_stopping():
             if self._tick_lock.acquire(blocking=False):
                 try:
-                    self._tick()
+                    if self._should_skip_auto_tick():
+                        logger.info(
+                            "Sync automatica saltata: attendo prima di riprovare "
+                            "il login (cooldown dopo un tentativo fallito)."
+                        )
+                        self._notify_login_cooldown_status()
+                    else:
+                        self._tick()
                 finally:
                     self._tick_lock.release()
             else:
@@ -97,6 +105,28 @@ class ReminderScheduler:
             interval = max(1, self._config.poll_interval_minutes) * 60
             if self._wait_for_next_tick(interval):
                 break
+
+    def _should_skip_auto_tick(self) -> bool:
+        """True if the automatic loop should skip opening another headed
+        browser right after a recent failed interactive login attempt.
+
+        Manual actions (run_once(), tray "Login"/"Riconnetti") are not
+        affected — the user is present and ready to interact in that case.
+        """
+        if self._browser.has_valid_session():
+            return False
+        remaining = self._browser.seconds_since_headed_failure()
+        return remaining is not None and remaining < _LOGIN_RETRY_COOLDOWN_SECONDS
+
+    def _notify_login_cooldown_status(self) -> None:
+        remaining = self._browser.seconds_since_headed_failure()
+        minutes_left = 1
+        if remaining is not None:
+            minutes_left = max(1, math.ceil((_LOGIN_RETRY_COOLDOWN_SECONDS - remaining) / 60))
+        self._notify_status(
+            f"Login in sospeso — nuovo tentativo automatico tra {minutes_left} min "
+            "(o usa Login/Riconnetti dal menu)"
+        )
 
     def _wait_for_next_tick(self, interval: float) -> bool:
         """Wait until the next poll. Returns True if the scheduler should stop."""
@@ -137,8 +167,11 @@ class ReminderScheduler:
         except PermissionError as exc:
             self._last_error = str(exc)
             logger.warning("%s", exc)
-            self._browser.request_reconnect()
-            self._notify_status("Sessione scaduta — usa Riconnetti dal menu")
+            # Don't nuke the browser profile for a single unconfirmed 401 —
+            # just force a fresh (silent, cookie-reusing) attempt on the next
+            # tick. Only an explicit "Riconnetti" should wipe saved cookies.
+            self._browser.invalidate_session()
+            self._notify_status("Sessione da verificare — nuovo tentativo in corso")
         except Exception as exc:
             self._last_error = str(exc)
             logger.error("Errore sincronizzazione: %s", exc)
